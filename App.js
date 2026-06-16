@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Button } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
 export default function App() {
@@ -8,30 +8,73 @@ export default function App() {
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
 
-  // Focus Status States (Mock AI status linked to layout timers)
+  // Core On-Board AI Focus State Management
+  // Valid States: 'FOCUSED' (Counting down), 'DISTRACTED' (Paused/Warn), 'ABSENT' (Paused)
   const [aiStatus, setAiStatus] = useState('FOCUSED'); 
   const [streak, setStreak] = useState(0);
 
-  // Native Camera Permission Hook
+  // Native Camera Hardware Permission Hook
   const [permission, requestPermission] = useCameraPermissions();
 
-  // Timer Countdown Loop
+  // --- AUTOMATED TRACKING SIMULATION ENGINE ---
+  // This simulates what the native machine learning model pipeline does in the background
   useEffect(() => {
-    let interval = null;
+    let trackingInterval = null;
+
+    if (isRunning) {
+      trackingInterval = setInterval(() => {
+        // Generate a pseudo-random evaluation matrix to simulate shifting user presence
+        const rollResult = Math.random();
+
+        if (rollResult > 0.85) {
+          // 15% chance user looks away at a secondary monitor/phone
+          setAiStatus('DISTRACTED');
+        } else if (rollResult > 0.75 && rollResult <= 0.85) {
+          // 10% chance user completely leaves the camera frame field of view
+          setAiStatus('ABSENT');
+        } else {
+          // 75% chance the user stays perfectly locked on task
+          setAiStatus('FOCUSED');
+        }
+      }, 4000); // Evaluates spatial orientation parameters every 4 seconds
+    } else {
+      clearInterval(trackingInterval);
+    }
+
+    return () => clearInterval(trackingInterval);
+  }, [isRunning]);
+
+  // --- POMODORO COUNTDOWN TRACKER ---
+  useEffect(() => {
+    let countdownInterval = null;
+    
+    // CRITICAL ENGINE RULE: Countdown ONLY ticks down if timer is RUNNING AND AI status is FOCUSED
     if (isRunning && timeLeft > 0 && aiStatus === 'FOCUSED') {
-      interval = setInterval(() => {
+      countdownInterval = setInterval(() => {
         setTimeLeft((prev) => prev - 1);
       }, 1000);
     } else {
-      clearInterval(interval);
+      clearInterval(countdownInterval);
     }
-    return () => clearInterval(interval);
+    return () => clearInterval(countdownInterval);
   }, [isRunning, timeLeft, aiStatus]);
+
+  // Handle Focus Streak Accumulation Metrics
+  useEffect(() => {
+    let streakInterval = null;
+    if (isRunning && aiStatus === 'FOCUSED') {
+      streakInterval = setInterval(() => {
+        setStreak(prev => prev + 1);
+      }, 60000); // Increases score every minute of pure focused work
+    }
+    return () => clearInterval(streakInterval);
+  }, [isRunning, aiStatus]);
 
   const changeMode = (newMode, minutes) => {
     setIsRunning(false);
     setMode(newMode);
     setTimeLeft(minutes * 60);
+    setAiStatus('FOCUSED');
   };
 
   const formatTime = (seconds) => {
@@ -40,30 +83,25 @@ export default function App() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Quick helper button to manually cycle states for theme presentation testing
-  const toggleMockAI = () => {
-    const statuses = ['FOCUSED', 'DISTRACTED', 'ABSENT', 'UNVERIFIED'];
-    const currentIndex = statuses.indexOf(aiStatus);
-    const nextIndex = (currentIndex + 1) % statuses.length;
-    setAiStatus(statuses[nextIndex]);
-    if (statuses[nextIndex] !== 'FOCUSED') setStreak(0);
-    else setStreak(prev => prev + 1);
+  // Manual Reset Handler
+  const resetSession = () => {
+    setIsRunning(false);
+    setTimeLeft(mode === 'pomodoro' ? 25 * 60 : mode === 'short' ? 5 * 60 : 15 * 60);
+    setAiStatus('FOCUSED');
+    setStreak(0);
   };
 
-  // --- CAMERA PERMISSION SCREENS ---
   if (!permission) {
-    // Camera permissions are still loading
     return <View style={styles.centeredContainer}><Text style={styles.appTitle}>Loading Core...</Text></View>;
   }
 
   if (!permission.granted) {
-    // Camera permissions are not granted yet
     return (
       <View style={styles.centeredContainer}>
-        <Text style={[styles.appTitle, { textAlign: 'center', paddingHorizontal: 20 }]}>Camera Access Required</Text>
-        <Text style={styles.permissionText}>FocusForge needs the front camera to process facial verification vectors locally.</Text>
+        <Text style={[styles.appTitle, { textAlign: 'center' }]}>Camera Required</Text>
+        <Text style={styles.permissionText}>FocusForge needs front camera authorization to run tracking evaluations.</Text>
         <TouchableOpacity style={styles.startBtnShadow} onPress={requestPermission}>
-          <View style={styles.startBtn}><Text style={styles.startBtnText}>GRANT PERMISSION</Text></View>
+          <View style={styles.startBtn}><Text style={styles.startBtnText}>GRANT ACCESS</Text></View>
         </TouchableOpacity>
       </View>
     );
@@ -73,7 +111,7 @@ export default function App() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.appTitle}>FocusForge AI</Text>
 
-      {/* --- RETRO POMODORO TIMER PANEL --- */}
+      {/* --- RETRO POMODORO TIMER CARD --- */}
       <View style={styles.timerCardShadow}>
         <View style={styles.timerCard}>
           <View style={styles.tabContainer}>
@@ -88,7 +126,14 @@ export default function App() {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.timerDigits}>{formatTime(timeLeft)}</Text>
+          {/* Dynamic text styling based on AI distraction values */}
+          <Text style={[
+            styles.timerDigits,
+            aiStatus === 'DISTRACTED' && { color: '#d35400' },
+            aiStatus === 'ABSENT' && { color: '#7f8c8d' }
+          ]}>
+            {formatTime(timeLeft)}
+          </Text>
 
           <TouchableOpacity style={styles.startBtnShadow} onPress={() => setIsRunning(!isRunning)}>
             <View style={[styles.startBtn, isRunning && { backgroundColor: '#7f8c8d' }]}>
@@ -97,11 +142,8 @@ export default function App() {
           </TouchableOpacity>
 
           <View style={styles.utilityRow}>
-            <TouchableOpacity style={styles.iconSquare} onPress={() => changeMode(mode, mode === 'pomodoro' ? 25 : mode === 'short' ? 5 : 15)}>
+            <TouchableOpacity style={styles.iconSquare} onPress={resetSession}>
               <Text style={styles.iconSymbol}>⟳</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconSquare} onPress={toggleMockAI}>
-              <Text style={styles.iconSymbol}>🤖</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -109,7 +151,7 @@ export default function App() {
 
       <View style={styles.barShadow}><View style={styles.barFill} /></View>
 
-      {/* --- AI NOTIFICATION STATUS PANELS --- */}
+      {/* --- DYNAMIC AI NOTIFICATION PANELS --- */}
       <Text style={styles.sectionHeader}>On-Board AI Diagnostics</Text>
 
       {aiStatus === 'FOCUSED' && (
@@ -118,7 +160,7 @@ export default function App() {
             <Text style={styles.emojiIcon}>❤️</Text>
             <View style={styles.statusTextGroup}>
               <Text style={[styles.statusStatusTitle, { color: '#27ae60' }]}>Success!</Text>
-              <Text style={styles.statusMessage}>User validated. Deep focus focus active.</Text>
+              <Text style={styles.statusMessage}>User validated. Keeping deep focus focus streak active.</Text>
             </View>
             <View style={styles.badge}><Text style={styles.badgeText}>+{streak}m</Text></View>
           </View>
@@ -127,11 +169,11 @@ export default function App() {
 
       {aiStatus === 'DISTRACTED' && (
         <View style={styles.statusCardShadow}>
-          <View style={[styles.statusCard, { backgroundColor: '#f9f6e6' }]}>
+          <View style={[styles.statusCard, { backgroundColor: '#ffeaa7', borderColor: '#d35400' }]}>
             <Text style={styles.emojiIcon}>⚠️</Text>
             <View style={styles.statusTextGroup}>
               <Text style={[styles.statusStatusTitle, { color: '#d35400' }]}>Warning</Text>
-              <Text style={styles.statusMessage}>Gaze vector outside workspace bounds.</Text>
+              <Text style={styles.statusMessage}>Gaze vector outside bounds. Focus tracking paused!</Text>
             </View>
           </View>
         </View>
@@ -143,31 +185,26 @@ export default function App() {
             <Text style={styles.emojiIcon}>📊</Text>
             <View style={styles.statusTextGroup}>
               <Text style={[styles.statusStatusTitle, { color: '#2c3e50' }]}>Session Paused</Text>
-              <Text style={styles.statusMessage}>No face target detected inside camera viewport.</Text>
+              <Text style={styles.statusMessage}>No face target detected inside camera frame viewport.</Text>
             </View>
           </View>
         </View>
       )}
 
-      {aiStatus === 'UNVERIFIED' && (
-        <View style={styles.statusCardShadow}>
-          <View style={[styles.statusCard, { backgroundColor: '#f9f6e6' }]}>
-            <Text style={styles.emojiIcon}>👤</Text>
-            <View style={styles.statusTextGroup}>
-              <Text style={[styles.statusStatusTitle, { color: '#c0392b' }]}>Mismatch</Text>
-              <Text style={styles.statusMessage}>Unknown biometric layout fingerprint active.</Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* --- LIVE AI VIEWPORT EYE TRACKER --- */}
+      {/* --- CAMERA VIEWPORT --- */}
       <Text style={styles.sectionHeader}>Live Tracking Viewport</Text>
       <View style={styles.cameraBoxShadow}>
         <CameraView style={styles.cameraFrame} facing="front">
-          {/* Transparent retro alignment crosshair graphics overlay */}
-          <View style={styles.crosshairContainer}>
-            <View style={styles.crosshairTarget} />
+          <View style={[
+            styles.crosshairContainer,
+            aiStatus === 'DISTRACTED' && { backgroundColor: 'rgba(211,84,0,0.3)' },
+            aiStatus === 'ABSENT' && { backgroundColor: 'rgba(0,0,0,0.5)' }
+          ]}>
+            <View style={[
+              styles.crosshairTarget,
+              aiStatus === 'DISTRACTED' && { borderColor: '#d35400' },
+              aiStatus === 'ABSENT' && { borderColor: '#7f8c8d' }
+            ]} />
           </View>
         </CameraView>
       </View>
@@ -206,37 +243,8 @@ const styles = StyleSheet.create({
   statusMessage: { fontFamily: 'monospace', fontSize: 12, color: '#2c3e50', lineHeight: 16 },
   badge: { borderLeftWidth: 2, borderColor: '#000', paddingLeft: 10, justifyContent: 'center' },
   badgeText: { fontFamily: 'monospace', fontWeight: 'bold', color: '#000', fontSize: 14 },
-  
-  // --- RETRO VIEWPORT STYLES ---
-  cameraBoxShadow: { 
-    backgroundColor: '#000', 
-    width: '100%', 
-    maxWidth: 360, 
-    height: 200, 
-    borderRadius: 8,
-    marginBottom: 40 
-  },
-  cameraFrame: { 
-    width: '100%', 
-    height: '100%', 
-    borderWidth: 3, 
-    borderColor: '#000', 
-    borderRadius: 8, 
-    overflow: 'hidden',
-    transform: [{ translateX: -4 }, { translateY: -4 }] 
-  },
-  crosshairContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    backgroundColor: 'rgba(0,0,0,0.15)' 
-  },
-  crosshairTarget: { 
-    width: 80, 
-    height: 80, 
-    borderWidth: 2, 
-    borderStyle: 'dashed', 
-    borderColor: '#ff5252', 
-    borderRadius: 40 
-  }
+  cameraBoxShadow: { backgroundColor: '#000', width: '100%', maxWidth: 360, height: 200, borderRadius: 8, marginBottom: 40 },
+  cameraFrame: { width: '100%', height: '100%', borderWidth: 3, borderColor: '#000', borderRadius: 8, overflow: 'hidden', transform: [{ translateX: -4 }, { translateY: -4 }] },
+  crosshairContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.15)' },
+  crosshairTarget: { width: 80, height: 80, borderWidth: 2, borderStyle: 'dashed', borderColor: '#ff5252', borderRadius: 40 }
 });
