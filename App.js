@@ -1,54 +1,58 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView } from 'react-native';
+// 1. Added Vibration to the React Native core imports
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Vibration } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
 export default function App() {
-  // Timer States
   const [mode, setMode] = useState('pomodoro');
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
-
-  // Core On-Board AI Focus State Management
-  // Valid States: 'FOCUSED' (Counting down), 'DISTRACTED' (Paused/Warn), 'ABSENT' (Paused)
   const [aiStatus, setAiStatus] = useState('FOCUSED'); 
   const [streak, setStreak] = useState(0);
 
-  // Native Camera Hardware Permission Hook
   const [permission, requestPermission] = useCameraPermissions();
 
-  // --- AUTOMATED TRACKING SIMULATION ENGINE ---
-  // This simulates what the native machine learning model pipeline does in the background
+  // --- AUTOMATED TRACKING SIMULATION ENGINE WITH HAPTICS ---
   useEffect(() => {
     let trackingInterval = null;
 
     if (isRunning) {
       trackingInterval = setInterval(() => {
-        // Generate a pseudo-random evaluation matrix to simulate shifting user presence
         const rollResult = Math.random();
 
         if (rollResult > 0.85) {
-          // 15% chance user looks away at a secondary monitor/phone
           setAiStatus('DISTRACTED');
-        } else if (rollResult > 0.75 && rollResult <= 0.85) {
-          // 10% chance user completely leaves the camera frame field of view
+          
+          // 2. TRIGGER RETRO WARNING VIBRATION
+          // Pattern format: [Wait time, Vibrate duration, Pause time, Vibrate duration]
+          // This creates a distinct double-buzz warning effect
+          Vibration.vibrate([0, 400, 200, 400]);
+
+        } else if (rollResult > 0.70 && rollResult <= 0.85) {
           setAiStatus('ABSENT');
+          
+          // 3. TRIGGER SEPARATE ABSENT BUZZ 
+          // Just a single quick 300ms buzz to signal the camera framework lost tracking
+          Vibration.vibrate(300);
+
         } else {
-          // 75% chance the user stays perfectly locked on task
           setAiStatus('FOCUSED');
         }
-      }, 4000); // Evaluates spatial orientation parameters every 4 seconds
+      }, 5000); // Evaluates tracking vectors every 5 seconds
     } else {
       clearInterval(trackingInterval);
+      Vibration.cancel(); // Clears any lingering active vibration queues if paused
     }
 
-    return () => clearInterval(trackingInterval);
+    return () => {
+      clearInterval(trackingInterval);
+      Vibration.cancel();
+    };
   }, [isRunning]);
 
   // --- POMODORO COUNTDOWN TRACKER ---
   useEffect(() => {
     let countdownInterval = null;
-    
-    // CRITICAL ENGINE RULE: Countdown ONLY ticks down if timer is RUNNING AND AI status is FOCUSED
     if (isRunning && timeLeft > 0 && aiStatus === 'FOCUSED') {
       countdownInterval = setInterval(() => {
         setTimeLeft((prev) => prev - 1);
@@ -59,13 +63,13 @@ export default function App() {
     return () => clearInterval(countdownInterval);
   }, [isRunning, timeLeft, aiStatus]);
 
-  // Handle Focus Streak Accumulation Metrics
+  // Focus Streak Accumulation Metrics
   useEffect(() => {
     let streakInterval = null;
     if (isRunning && aiStatus === 'FOCUSED') {
       streakInterval = setInterval(() => {
         setStreak(prev => prev + 1);
-      }, 60000); // Increases score every minute of pure focused work
+      }, 60000); 
     }
     return () => clearInterval(streakInterval);
   }, [isRunning, aiStatus]);
@@ -75,6 +79,7 @@ export default function App() {
     setMode(newMode);
     setTimeLeft(minutes * 60);
     setAiStatus('FOCUSED');
+    Vibration.cancel();
   };
 
   const formatTime = (seconds) => {
@@ -83,12 +88,12 @@ export default function App() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Manual Reset Handler
   const resetSession = () => {
     setIsRunning(false);
     setTimeLeft(mode === 'pomodoro' ? 25 * 60 : mode === 'short' ? 5 * 60 : 15 * 60);
     setAiStatus('FOCUSED');
     setStreak(0);
+    Vibration.cancel();
   };
 
   if (!permission) {
@@ -126,7 +131,6 @@ export default function App() {
             </TouchableOpacity>
           </View>
 
-          {/* Dynamic text styling based on AI distraction values */}
           <Text style={[
             styles.timerDigits,
             aiStatus === 'DISTRACTED' && { color: '#d35400' },
